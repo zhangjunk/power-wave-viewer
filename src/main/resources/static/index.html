@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>录播文件平台</title>
+    <script src="/axios.min.js"></script>
+    <script src="/index.js"></script>
+    <!-- ECharts核心和3D扩展 -->
+    <script src="/echarts.min.js"></script>
+    <script src="/echarts-gl.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Microsoft Yahei", sans-serif;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            background-color: #060b1e;
+        }
+
+        /* 左侧目录样式*/
+        .sidebar {
+            width: 320px;
+            min-width: 320px;
+            /**background-color: #f5f5f5;
+            border: 1px solid #e5e5e5;**/
+            border: .1vh solid #01AAED66;
+            /**padding: 20px 0;**/
+            height: 93.5vh;
+        }
+
+        /**.sidebar-title {
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 1px solid #e5e5e5;
+            line-height: 50px;
+            text-align: center;
+        }**/
+
+        /* 表单容器样式 */
+        .search-container-grid {
+            flex: 1;
+            width: 100%;
+            display: block;
+            grid-template-columns: 2fr 2fr 1fr;
+            grid-template-rows: auto auto 1fr;
+            /**gap: 5px;**/
+        }
+
+        /* 每个表单项的样式 - 垂直布局核心 */
+        .form-item {
+            width: 100%;
+            height: 100%;
+            padding: 5px 5px 0px 5px;
+            display: flex;
+            gap: 10px;
+        }
+
+        /* 输入框/下拉框样式 */
+        .form-item input,
+        .form-item select {
+            width: 100%; /*输入控件统一宽度 */
+            height: 30px;
+            /*padding: 0 10px;  */
+            border: 1px solid #dcdcdc;
+            border-radius: 4px;
+            box-sizing: border-box; /* 防止padding撑大宽度 */
+            margin-bottom: 5px;
+            /* 重置浏览器默认的外观样式
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none; */
+        }
+        .form-item span{
+            padding-top: 3px;
+            font-size: 14px;
+            color: #DCDCDC;
+        }
+
+        /* 专门针对日期输入框的样式覆盖，确保兼容性 */
+        .form-item input[type="date"] {
+            /* 强制宽度100%，覆盖浏览器默认值 */
+            width: 100% !important;
+            /* 统一日期输入框的内边距和盒模型 */
+            /* padding: 0 8px; 微调日期输入框内边距，适配不同浏览器 */
+            /* 确保高度和其他输入框一致 */
+            line-height: 34px; /* 行高比高度小2px，避免内容溢出 */
+            /* background: #dcdcdc; */
+        }
+
+        .searchBtn{
+            padding-bottom: 5px;
+            height: 35px;
+            display: flex;          /* 核心：开启弹性布局 */
+            justify-content: space-between; /* 核心：子元素（两个按钮）两端对齐 */
+            gap: 15px;              /* 核心：两个按钮中间的间距，值可自定义 10px/20px 都可以 */
+            align-items: center;
+        }
+
+        /* 查询按钮样式 */
+        .search-btn {
+            width: 45%;
+            height: 100%;
+            /**background: linear-gradient(133deg,#3e81e7 0%,#1d4acb 100%);**/
+            background-color: #3e81e7;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            /**transition: background-color 0.2s ease;**/
+        }
+
+        .search-btn:hover {
+            background-color: #1d4acb; /* 国网绿深色hover */
+        }
+        .reset-btn {
+            width: 45%;
+            height: 100%;
+            background-color: #fff;
+            color: #666;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            outline: none;
+            user-select: none;
+        }
+        .reset-btn:hover {
+            border-color: #999;
+            color: #333;
+        }
+
+        #list-container {
+            list-style: none;
+            font-size: 14px;
+            color: #fff;
+            /**border: 1px solid #eee;
+            border-radius: 8px;**/
+        }
+        #list-container li {
+            padding: 8px 8px;
+            transition: background-color 0.2s ease; /* 背景色过渡，更丝滑 */
+            /*border-top: 1px solid #b8b0b0;  分隔线 */
+            border-top: 1px solid #363637;
+            cursor: pointer;
+        }
+
+        /* 鼠标滑过的背景色 */
+        #list-container li:hover {
+            background-color: #94b4a8; /*国网绿浅*/
+        }
+
+        /* 选中后的背景色（自定义active类） */
+        #list-container li.active {
+            background-color: #535b6b;
+        }
+
+        /* 选中+hover时的样式（可选，避免hover覆盖选中色） */
+        #list-container li.active:hover {
+            background-color: #94b4a8; /* 选中态hover略加深，提升层次感 */
+        }
+
+        .list-li{
+            height: calc(100vh - 180px); /* 继承网格行的1fr高度 */
+            /* max-height: 82%; 强制不超过父容器高度 */
+            overflow-y: auto; /* 内容超出时垂直滚动，不溢出屏幕 */
+            overflow-x: hidden; /* 禁止水平滚动，避免布局错乱 */
+        }
+
+        /* 分页控件样式（核心新增） */
+        .pagination {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .pagination .page-size {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pagination .page-size select {
+            width: 90px;
+            height: 28px;
+            border: 1px solid #dcdcdc;
+            border-radius: 4px;
+            padding: 0 5px;
+        }
+
+        .pagination .page-num {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pagination button {
+            width: 28px;
+            height: 28px;
+            border: 1px solid #dcdcdc;
+            border-radius: 4px;
+            background-color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pagination button:disabled {
+            background-color: #f5f5f5;
+            color: #999;
+            cursor: not-allowed;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background-color: #E6F4EA;
+            border-color: #00B42A;
+            color: #00B42A;
+        }
+
+        .pagination .page-num span {
+            margin: 0 5px;
+        }
+
+        .pagination .page-num .current-page {
+            color: #abdfff;
+            font-weight: 600;
+        }
+
+
+
+        /* 右侧图表区域样式 */
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .content-title {
+            display: flex;
+            justify-content: space-between; /* 左右两端对齐 */
+            align-items: center; /* 垂直居中 */
+            margin-bottom: 5px;
+        }
+
+        /* 下载按钮样式（适配国网风格） */
+        .download-btn {
+            padding: 4px 10px;
+            background:linear-gradient(133deg,#3e81e7 0%,#1d4acb 100%);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s ease;
+        }
+
+        /**.download-btn:hover {
+            background-color: #007D4E;
+        }
+
+        .download-btn:active {
+            background-color: #006640;
+        }**/
+
+
+
+        #prpd-chart,#prps-chart,#waveform-chart {
+            width: 100%;
+            /**border: 1px solid #eee;**/
+            position: relative; /* 关键：让加载动画绝对定位 */
+            overflow: hidden;
+        }
+        /* 加载转圈动画样式 */
+        .loading-spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            border: 5px solid #eee;
+            border-top: 5px solid #00965E; /* 国网绿，和波形颜色一致 */
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            z-index: 10; /* 确保在图表上方显示 */
+        }
+
+        /* 加载文字提示 */
+        .loading-text {
+            position: absolute;
+            top: calc(50% + 60px);
+            left: 50%;
+            transform: translateX(-50%);
+            color: #666;
+            font-size: 14px;
+            z-index: 10;
+        }
+
+        /* 转圈动画关键帧 */
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* 图表容器网格布局 */
+        .charts-grid {
+            flex: 1;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 15px;
+        }
+
+        /* 三个图表容器样式 */
+        .chart-item {
+            width: 100%;
+            height: 100%;
+            /**border: 1px solid #eee;**/
+            border: .1vh solid #01AAED66;
+            border-radius: 4px;
+            padding: 5px;
+        }
+
+        .chart-item.waveform {
+            grid-column: 1 / 3;
+        }
+
+        /* 响应式适配 */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+            .sidebar {
+                width: 100%;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid #e5e5e5;
+            }
+            .charts-grid {
+                grid-template-rows: 1.5fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 左侧目录区域 -->
+    <div class="sidebar">
+        <!--<div class="sidebar-title">录播文件平台</div>-->
+        <div class="search-container-grid">
+            <!-- 第一个查询条件：编号 -->
+            <div class="form-item">
+                <input type="text" id="fileName" placeholder="名称/日期">
+                <select id="fileType">
+                    <option value="">全部</option>
+                    <option value="频谱" selected>频谱</option>
+                    <option value="其他">其他</option>
+                </select>
+            </div>
+            <div class="form-item">
+                <span>从</span><input type="date" id="beginDate">
+                <span>到</span><input type="date" id="endDate">
+            </div>
+            <div class="form-item searchBtn">
+                <!-- 查询按钮 -->
+                <button class="search-btn" id="searchFileBtn">查询</button>
+                <button class="reset-btn" id="resetBtn">重置</button>
+            </div>
+        </div>
+        <div  class="list-li">
+            <ul id="list-container"></ul>
+        </div>
+        <!-- 5. 分页控件（核心新增） -->
+        <div class="pagination">
+            <div class="page-size">
+                <select id="pageSizeSelect">
+                    <option value="20" selected>20条/页</option>
+                    <option value="50">50条/页</option>
+                    <option value="100">100条/页</option>
+                    <option value="200">200条/页</option>
+                </select>
+            </div>
+            <div class="page-num">
+                <button id="prevPageBtn"><</button>
+                <span>当前第<span class="current-page" id="currentPage">1</span>页/共<span id="totalPage">0</span>页</span>
+                <button id="nextPageBtn">></button>
+                <!--<span class="pagination-jump-text">前往</span>
+                <input type="number" class="pagination-jump-input" id="pagination-jump-input" min="1" max="${this.totalPages}" value="${this.config.currentPage}">
+                <span class="pagination-jump-text">页</span>
+                <button class="pagination-btn" id="pagination-jump-btn">确定</button>-->
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧图表展示区域 -->
+    <div class="main-content">
+        <div class="content-title" id="chart-title">
+            <!-- <span class="title-text">图谱展示</span>-->
+            <!-- 下载按钮 -->
+            <button class="download-btn" id="downloadChart">
+                下载文件
+            </button>
+        </div>
+        <div class="charts-grid">
+            <!-- 上左：PRPD图谱 -->
+            <div id="prpd-chart" class="chart-item">
+                <!-- 加载动画 DOM -->
+                <!--<div class="loading-spinner" id="spinner1"></div>
+                <div class="loading-text" id="loadingText">数据加载中...</div>-->
+            </div>
+            <!-- 上右：PRPS图谱（3D柱状图+Simplex Noise） -->
+            <div id="prps-chart" class="chart-item">
+                <!-- 加载动画 DOM -->
+                <!--<div class="loading-spinner" id="spinner2"></div>
+                <div class="loading-text" id="loadingText">数据加载中...</div>-->
+            </div>
+            <!-- 下侧：时域波形图（非平滑、锯齿状、双极性、动态跳动） -->
+            <div id="waveform-chart" class="chart-item waveform">
+                <!-- 加载动画 DOM -->
+                <!--<div class="loading-spinner" id="spinner3"></div>
+                <div class="loading-text" id="loadingText">数据加载中...</div>-->
+            </div>
+        </div>
+    </div>
+</body>
+</html>
